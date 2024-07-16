@@ -196,7 +196,8 @@ def get_constituents_ftse100():
     return df
 
 # main
-if __name__ == '__main__':
+runMain = False
+if __name__ == '__main__' and runMain:
     print('Fetching the constituents of CSI 300...')
     try:
         df = get_constituents_csi300()
