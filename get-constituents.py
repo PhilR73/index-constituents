@@ -87,9 +87,9 @@ def get_constituents_from_wikipedia(url, headers=None, suffix=''):
     tables = pd.read_html(StringIO(r.text))
     
     for t in tables:
-        cols = [c.lower() for c in t.columns]
-        sym_col = next((c for c in t.columns if c.lower() in ['ticker', 'symbol', 'code']), None)
-        name_col = next((c for c in t.columns if c.lower() in ['company', 'security', 'company name']), None)
+        cols = [c for c in t.columns]
+        sym_col = next((c for c in cols if str(c).lower() in ['ticker', 'symbol', 'code']), None)
+        name_col = next((c for c in cols if str(c).lower() in ['company', 'security', 'company name']), None)
         
         if sym_col and name_col:
             df = t[[sym_col, name_col]].copy()
@@ -101,13 +101,15 @@ def get_constituents_from_wikipedia(url, headers=None, suffix=''):
 
 # --- Index Logic ---
 
-def fetch_and_save(name, fetch_func, filename):
+def fetch_and_save(name, fetch_func, filename, dir, dfs):
     print(f'Fetching the constituents of {name}...')
     for i in range(n_retries):
         try:
             df = fetch_func()
-            df.to_csv(f'docs/{filename}.csv', index=False)
-            df.to_json(f'docs/{filename}.json', orient='records')
+            if dir:
+                df.to_csv(f'{dir}/{filename}.csv', index=False)
+                df.to_json(f'{dir}/{filename}.json', orient='records')
+            dfs.append(df)
             return True
         except Exception as e:
             print(f'Attempt {i+1} failed: {e}')
@@ -115,19 +117,20 @@ def fetch_and_save(name, fetch_func, filename):
                 time.sleep(random.paretovariate(2) * 5)
     return False
 
-runMain = False
-if __name__ == '__main__' and runMain:
+def get_constituents(indices=None, dir=None):
+    dfs = []
     status = 0
-    
+
     # Bloomberg Indices
     indices_bloomberg = [
         ('DAX', lambda: get_constituents_from_bloomberg('https://www.bloomberg.com/quote/DAX:IND/members', converter=lambda s: s.replace(':GR', '.DE')), 'constituents-dax'),
         ('Hang Seng Index', lambda: get_constituents_from_bloomberg('https://www.bloomberg.com/quote/HSI:IND/members', converter=lambda s: s.rjust(7, '0').replace(':', '.')), 'constituents-hsi'),
-        ('FTSE 100', lambda: get_constituents_from_bloomberg('https://www.bloomberg.com/quote/UKX:IND/members', converter=lambda s: s.replace(':LN', '.L')), 'constituents-ftse100'),
+        ('FTSE 100B', lambda: get_constituents_from_bloomberg('https://www.bloomberg.com/quote/UKX:IND/members', converter=lambda s: s.replace(':LN', '.L')), 'constituents-ftse100'),
     ]
 
     for name, func, file in indices_bloomberg:
-        if not fetch_and_save(name, func, file): status = 1
+        if indices and name not in indices: continue
+        if not fetch_and_save(name, func, file, dir, dfs): status = 1
         time.sleep(random.paretovariate(2) * 5)
 
     # CSIndex / SZSE
@@ -140,7 +143,8 @@ if __name__ == '__main__' and runMain:
     ]
 
     for name, func, file in indices_china:
-        if not fetch_and_save(name, func, file): status = 1
+        if indices and name not in indices: continue
+        if not fetch_and_save(name, func, file, dir, dfs): status = 1
 
     # Slickcharts
     indices_slick = [
@@ -150,18 +154,21 @@ if __name__ == '__main__' and runMain:
     ]
 
     for name, func, file in indices_slick:
-        if not fetch_and_save(name, func, file): status = 1
+        if indices and name not in indices: continue
+        if not fetch_and_save(name, func, file, dir, dfs): status = 1
 
     # Wikipedia
     indices_wiki = [
         ('IBEX 35', lambda: get_constituents_from_wikipedia('https://en.wikipedia.org/wiki/IBEX_35'), 'constituents-ibex35'),
         ('FTSE MIB', lambda: get_constituents_from_wikipedia('https://en.wikipedia.org/wiki/FTSE_MIB'), 'constituents-ftsemib'),
+        ('FTSE 100', lambda: get_constituents_from_wikipedia('https://en.wikipedia.org/wiki/FTSE_100_Index'), 'constituents-ftse100'),
         ('NIFTY 50', lambda: get_constituents_from_wikipedia('https://en.wikipedia.org/wiki/NIFTY_50', suffix='.NS'), 'constituents-nifty50'),
         ('S&P/ASX 200', lambda: get_constituents_from_wikipedia('https://en.wikipedia.org/wiki/S%26P/ASX_200', suffix='.AX'), 'constituents-asx200'),
     ]
 
     for name, func, file in indices_wiki:
-        if not fetch_and_save(name, func, file): status = 1
+        if indices and name not in indices: continue
+        if not fetch_and_save(name, func, file, dir, dfs): status = 1
 
     print('Done.')
-    sys.exit(status)
+    return dfs, status
